@@ -1,0 +1,11 @@
+# 環境變數（含 Bot Token，絕對不能上傳）
+.env
+
+# Python 暫存檔
+__pycache__/
+*.pyc
+*.pyo
+
+# Bot 執行 log
+bot.log
+nohup.out
