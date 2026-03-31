@@ -1,8 +1,8 @@
 """
-Telegram 換裝/換臉 Bot — V2
+Telegram 換裝/換臉 Bot — V3
 
 指令：
-  /go_c  — 換裝（Qwen Image Edit 兩階段）
+  /go_c  — 換裝（IDM-VTON，人物＋服裝）
   /go_f  — 換臉（ReActor 直接換臉）
   /go_k  — Klein VTON + 換臉（Klein 4B + Florence2 + ReActor，3 張圖）
   /cancel — 取消
@@ -11,7 +11,6 @@ Telegram 換裝/換臉 Bot — V2
 import os
 import json
 import time
-import shutil
 import asyncio
 import logging
 import urllib.request
@@ -124,7 +123,7 @@ def get_error_message(result: dict) -> str:
 
 
 # ── Workflow imports ──────────────────────────────────────────────
-from workflows.ClothingChange_V1 import build_stage1_extract, build_stage2_transfer
+from workflows.ClothingChange_IDM_VTON import build_idm_vton_workflow
 from workflows.FaceOff_V1 import build_faceoff_workflow
 from workflows.KleinVTON_V1 import build_klein_vton_workflow
 
@@ -136,7 +135,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 *換裝換臉 Bot*\n\n"
         "指令：\n"
-        "👗 /go\\_c — 換裝（Qwen，人物＋服裝）\n"
+        "👗 /go\\_c — 換裝（IDM\\-VTON，人物＋服裝）\n"
         "😊 /go\\_f — 換臉（ReActor，人物＋臉孔）\n"
         "✨ /go\\_k — Klein VTON（換裝＋換臉，3 張圖）\n"
         "❌ /cancel — 取消\n"
@@ -146,7 +145,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_go_c(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """開始換裝流程"""
+    """開始 IDM-VTON 換裝流程"""
     sess = get_session(update.effective_user.id)
     sess["mode"] = "clothing"
     sess["person"] = None
@@ -154,7 +153,7 @@ async def cmd_go_c(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     sess["face"] = None
     sess["step"] = "person"
     await update.message.reply_text(
-        "👗 *換裝模式*\n\n"
+        "👗 *IDM\\-VTON 換裝模式*（骨架引導 \\+ 自動遮罩 \\+ 臉部修復）\n\n"
         "📸 *步驟 1/2*\n請傳送【人物圖】（要換裝的那個人）",
         parse_mode="Markdown",
     )
@@ -348,117 +347,54 @@ async def start_processing(source, ctx: ContextTypes.DEFAULT_TYPE,
 
 async def process_clothing(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE,
                            sess: dict, user_id: int):
-    """Two-stage clothing change: extract → transfer"""
+    """IDM-VTON 換裝（骨架引導 + 自動遮罩 + 臉部修復）"""
 
     msg = await ctx.bot.send_message(
         chat_id=chat_id,
         text=(
-            "⏳ 👗 換裝處理中...\n\n"
+            "⏳ 👗 IDM-VTON 換裝處理中...\n\n"
             f"👤 人物: {sess['person']}\n"
             f"👗 服裝: {sess['clothing']}\n\n"
-            "📌 階段 1/2：提取服裝..."
-        ),
-    )
-
-    # ── Stage 1: Extract outfit ──
-    try:
-        wf1 = build_stage1_extract(sess["clothing"])
-        resp1 = comfy_post("/prompt", {"prompt": wf1})
-    except Exception as e:
-        err = e.read().decode()[:300] if hasattr(e, 'read') else str(e)
-        await ctx.bot.edit_message_text(
-            chat_id=chat_id, message_id=msg.message_id,
-            text=f"❌ Stage 1 提交失敗\n{err}"
-        )
-        reset_session(user_id)
-        return
-
-    pid1 = resp1.get("prompt_id")
-    log.info(f"[clothing] Stage 1 submitted: {pid1}")
-
-    result1 = await asyncio.to_thread(poll_result, pid1, timeout=180)
-    if result1 is None:
-        await ctx.bot.edit_message_text(
-            chat_id=chat_id, message_id=msg.message_id,
-            text="❌ Stage 1 逾時"
-        )
-        reset_session(user_id)
-        return
-
-    imgs1 = get_output_images(result1)
-    if not imgs1:
-        err = get_error_message(result1)
-        await ctx.bot.edit_message_text(
-            chat_id=chat_id, message_id=msg.message_id,
-            text=f"❌ Stage 1 失敗\n{err}"
-        )
-        reset_session(user_id)
-        return
-
-    # Copy extracted outfit from output to input
-    extracted_filename = imgs1[0]["filename"]
-    src_path = COMFYUI_OUTPUT_DIR / extracted_filename
-    dst_path = COMFYUI_INPUT_DIR / extracted_filename
-    try:
-        shutil.copy2(str(src_path), str(dst_path))
-    except Exception as e:
-        await ctx.bot.edit_message_text(
-            chat_id=chat_id, message_id=msg.message_id,
-            text=f"❌ 無法複製提取結果\n{e}"
-        )
-        reset_session(user_id)
-        return
-
-    log.info(f"[clothing] Stage 1 done: {extracted_filename}")
-
-    # ── Stage 2: Transfer outfit ──
-    await ctx.bot.edit_message_text(
-        chat_id=chat_id, message_id=msg.message_id,
-        text=(
-            "⏳ 👗 換裝處理中...\n\n"
-            f"👤 人物: {sess['person']}\n"
-            f"👗 服裝: {sess['clothing']}\n\n"
-            "✅ 階段 1 完成：服裝已提取\n"
-            "📌 階段 2/2：轉移服裝到人物..."
+            "DWPose 骨架 + DensePose + 自動遮罩 + 臉部修復\n"
+            "請稍候約 60~180 秒"
         ),
     )
 
     try:
-        wf2 = build_stage2_transfer(sess["person"], extracted_filename)
-        resp2 = comfy_post("/prompt", {"prompt": wf2})
+        wf = build_idm_vton_workflow(sess["person"], sess["clothing"])
+        resp = comfy_post("/prompt", {"prompt": wf})
     except Exception as e:
         err = e.read().decode()[:300] if hasattr(e, 'read') else str(e)
         await ctx.bot.edit_message_text(
             chat_id=chat_id, message_id=msg.message_id,
-            text=f"❌ Stage 2 提交失敗\n{err}"
+            text=f"❌ 提交失敗\n{err}"
         )
         reset_session(user_id)
         return
 
-    pid2 = resp2.get("prompt_id")
-    log.info(f"[clothing] Stage 2 submitted: {pid2}")
+    pid = resp.get("prompt_id")
+    log.info(f"[idm-vton] Submitted: {pid}")
 
-    result2 = await asyncio.to_thread(poll_result, pid2, timeout=180)
-    if result2 is None:
+    result = await asyncio.to_thread(poll_result, pid, timeout=420)
+    if result is None:
         await ctx.bot.edit_message_text(
             chat_id=chat_id, message_id=msg.message_id,
-            text="❌ Stage 2 逾時"
+            text="❌ 處理逾時（超過 7 分鐘）"
         )
         reset_session(user_id)
         return
 
-    imgs2 = get_output_images(result2)
-    if not imgs2:
-        err = get_error_message(result2)
+    imgs = get_output_images(result)
+    if not imgs:
+        err = get_error_message(result)
         await ctx.bot.edit_message_text(
             chat_id=chat_id, message_id=msg.message_id,
-            text=f"❌ Stage 2 失敗\n{err}"
+            text=f"❌ 處理失敗\n{err}"
         )
         reset_session(user_id)
         return
 
-    # Send result
-    await send_result_image(chat_id, ctx, msg, imgs2[0], "換裝", user_id)
+    await send_result_image(chat_id, ctx, msg, imgs[0], "IDM-VTON 換裝", user_id)
 
 
 async def process_face(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE,
@@ -591,7 +527,10 @@ async def send_result_image(chat_id, ctx, status_msg, img_info, mode_label, user
     await ctx.bot.send_photo(
         chat_id=chat_id,
         photo=img_data,
-        caption=f"✅ {mode_label}完成！\n/go_c 換裝 | /go_f 換臉",
+        caption=f"✅ {mode_label}完成！\n/go_c 換裝 | /go_f 換臉 | /go_k 換裝+換臉",
+        read_timeout=120,
+        write_timeout=120,
+        connect_timeout=30,
     )
 
     reset_session(user_id)
@@ -623,7 +562,14 @@ def main():
     reset_telegram_polling()
     time.sleep(2)
 
-    app = Application.builder().token(TOKEN).build()
+    app = (
+        Application.builder()
+        .token(TOKEN)
+        .read_timeout(120)
+        .write_timeout(120)
+        .connect_timeout(30)
+        .build()
+    )
 
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("go_c", cmd_go_c))
