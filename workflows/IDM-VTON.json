@@ -1,0 +1,305 @@
+{
+  "1": {
+    "inputs": {
+      "image": "person_input.jpg",
+      "upload": "image"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "人物照片 (Person Image)"
+    }
+  },
+  "2": {
+    "inputs": {
+      "image": "garment_input.jpg",
+      "upload": "image"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "服裝照片 (Garment Image)"
+    }
+  },
+
+  "11": {
+    "inputs": {
+      "width": 768,
+      "height": 1024,
+      "interpolation": "lanczos",
+      "method": "keep proportion",
+      "condition": "always",
+      "multiple_of": 8,
+      "image": ["1", 0]
+    },
+    "class_type": "ImageResize+",
+    "_meta": {
+      "title": "人物圖縮放至 768x1024"
+    }
+  },
+  "12": {
+    "inputs": {
+      "width": 768,
+      "height": 1024,
+      "interpolation": "lanczos",
+      "method": "keep proportion",
+      "condition": "always",
+      "multiple_of": 8,
+      "image": ["2", 0]
+    },
+    "class_type": "ImageResize+",
+    "_meta": {
+      "title": "服裝圖縮放至 768x1024"
+    }
+  },
+
+  "3": {
+    "inputs": {
+      "detect_hand": "enable",
+      "detect_body": "enable",
+      "detect_face": "enable",
+      "resolution": 1024,
+      "bbox_detector": "yolox_l.onnx",
+      "pose_estimator": "dw-ll_ucoco_384_bs5.torchscript.pt",
+      "image": ["11", 0]
+    },
+    "class_type": "DWPreprocessor",
+    "_meta": {
+      "title": "骨架擷取 (DWPose) - 全身偵測"
+    }
+  },
+  "4": {
+    "inputs": {
+      "model": "densepose_r50_fpn_dl.torchscript",
+      "cmap": "Viridis",
+      "resolution": 1024,
+      "image": ["11", 0]
+    },
+    "class_type": "DensePosePreprocessor",
+    "_meta": {
+      "title": "3D 人體拓樸 (DensePose)"
+    }
+  },
+
+  "5": {
+    "inputs": {
+      "model_name": "yisol/IDM-VTON",
+      "dtype": "fp16",
+      "download_if_missing": true
+    },
+    "class_type": "IDM_VTON_ModelLoader",
+    "_meta": {
+      "title": "IDM-VTON 核心模型載入 (fp16 省顯存)"
+    }
+  },
+
+  "6": {
+    "inputs": {
+      "model_name": "sam_vit_h_4b8939.pth",
+      "device_mode": "AUTO"
+    },
+    "class_type": "SAMLoader",
+    "_meta": {
+      "title": "SAM 模型載入"
+    }
+  },
+  "7": {
+    "inputs": {
+      "model_name": "GroundingDINO_SwinT_OGC (1.2GB)"
+    },
+    "class_type": "GroundingDinoModelLoader (segment anything)",
+    "_meta": {
+      "title": "GroundingDINO 模型載入"
+    }
+  },
+
+  "8": {
+    "inputs": {
+      "prompt": "upper body clothes . shirt . t-shirt . jacket . coat . top . blouse . sweater",
+      "threshold": 0.25,
+      "sam_model": ["6", 0],
+      "grounding_dino_model": ["7", 0],
+      "image": ["11", 0]
+    },
+    "class_type": "GroundingDinoSAMSegment (segmentator)",
+    "_meta": {
+      "title": "自動化遮罩 - 上衣偵測 (擴充關鍵字)"
+    }
+  },
+
+  "13": {
+    "inputs": {
+      "expand": 12,
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": 8,
+      "lerp_alpha": 0.6,
+      "decay_factor": 1.0,
+      "fill_holes": true,
+      "mask": ["8", 1]
+    },
+    "class_type": "GrowMaskWithBlur",
+    "_meta": {
+      "title": "遮罩擴展 + 羽化 (避免接縫)"
+    }
+  },
+
+  "9": {
+    "inputs": {
+      "garment_desc": "a photo of a high quality garment, clean background, studio lighting",
+      "negative_prompt": "monochrome, lowres, bad anatomy, worst quality, low quality, blurry, artifacts, deformed, disfigured",
+      "num_inference_steps": 50,
+      "guidance_scale": 3.0,
+      "seed": 0,
+      "pipe": ["5", 0],
+      "image": ["11", 0],
+      "garment_img": ["12", 0],
+      "pose_img": ["3", 0],
+      "densepose_img": ["4", 0],
+      "mask": ["13", 0]
+    },
+    "class_type": "IDM_VTON",
+    "_meta": {
+      "title": "IDM-VTON 核心生成 (50步 高品質)"
+    }
+  },
+
+  "14": {
+    "inputs": {
+      "guide_size": 384,
+      "guide_size_for": true,
+      "max_size": 1024,
+      "seed": 0,
+      "steps": 20,
+      "cfg": 7.0,
+      "sampler_name": "euler_ancestral",
+      "scheduler": "normal",
+      "denoise": 0.2,
+      "feather": 5,
+      "noise_mask": true,
+      "force_inpaint": true,
+      "bbox_threshold": 0.5,
+      "bbox_dilation": 10,
+      "bbox_crop_factor": 3.0,
+      "sam_detection_hint": "center-1",
+      "sam_dilation": 0,
+      "sam_threshold": 0.93,
+      "sam_bbox_expansion": 0,
+      "sam_mask_hint_threshold": 0.7,
+      "sam_mask_hint_use_negative": "False",
+      "drop_size": 10,
+      "wildcard": "",
+      "cycle": 1,
+      "inpaint_model": false,
+      "noise_mask_feather": 20,
+      "image": ["9", 0],
+      "model": ["20", 0],
+      "clip": ["20", 1],
+      "vae": ["20", 2],
+      "positive": ["21", 0],
+      "negative": ["22", 0],
+      "bbox_detector": ["23", 0],
+      "sam_model_opt": ["6", 0]
+    },
+    "class_type": "FaceDetailer",
+    "_meta": {
+      "title": "臉部修復 (FaceDetailer)"
+    }
+  },
+
+  "20": {
+    "inputs": {
+      "ckpt_name": "sd15/realisticVisionV60B1_v51VAE.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "SD1.5 寫實模型 (臉部修復用)"
+    }
+  },
+  "21": {
+    "inputs": {
+      "text": "sharp face, detailed eyes, natural skin texture, high quality portrait, same face as original, preserve facial features",
+      "clip": ["20", 1]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "臉部正面提示詞"
+    }
+  },
+  "22": {
+    "inputs": {
+      "text": "blurry, deformed face, extra fingers, bad anatomy, disfigured, poorly drawn face, different face, changed face",
+      "clip": ["20", 1]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "臉部負面提示詞"
+    }
+  },
+  "23": {
+    "inputs": {
+      "model_name": "bbox/face_yolov8m.pt"
+    },
+    "class_type": "UltralyticsDetectorProvider",
+    "_meta": {
+      "title": "人臉偵測器 (YOLOv8)"
+    }
+  },
+
+  "15": {
+    "inputs": {
+      "images": ["14", 0]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "預覽: 最終結果"
+    }
+  },
+  "16": {
+    "inputs": {
+      "images": ["13", 0]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "預覽: 遮罩 (Debug)"
+    }
+  },
+  "17": {
+    "inputs": {
+      "images": ["3", 0]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "預覽: 骨架 (Debug)"
+    }
+  },
+  "18": {
+    "inputs": {
+      "images": ["4", 0]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "預覽: DensePose (Debug)"
+    }
+  },
+
+  "10": {
+    "inputs": {
+      "filename_prefix": "VTON_IDM_Final",
+      "images": ["14", 0]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "儲存最終結果 (含臉部修復)"
+    }
+  },
+  "19": {
+    "inputs": {
+      "filename_prefix": "VTON_IDM_Raw",
+      "images": ["9", 0]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "儲存原始結果 (未修臉)"
+    }
+  }
+}

@@ -167,8 +167,8 @@ def build_idm_vton_workflow(person_img: str, garment_img: str) -> dict:
             "inputs": {
                 "garment_desc": "a photo of a high quality garment, clean background, studio lighting",
                 "negative_prompt": "monochrome, lowres, bad anatomy, worst quality, low quality, blurry, artifacts, deformed, disfigured",
-                "num_inference_steps": 40,
-                "guidance_scale": 2.5,
+                "num_inference_steps": 50,
+                "guidance_scale": 3.0,
                 "seed": 0,
                 "pipe": ["5", 0],
                 "image": ["11", 0],
@@ -177,7 +177,7 @@ def build_idm_vton_workflow(person_img: str, garment_img: str) -> dict:
                 "densepose_img": ["4", 0],
                 "mask": ["13", 0]
             },
-            "_meta": {"title": "IDM-VTON 核心生成 (40步 高品質)"}
+            "_meta": {"title": "IDM-VTON 核心生成 (50步 高品質)"}
         },
 
         # ── FaceDetailer 臉部修復 ────────────────────────────────────
@@ -191,7 +191,7 @@ def build_idm_vton_workflow(person_img: str, garment_img: str) -> dict:
         "21": {
             "class_type": "CLIPTextEncode",
             "inputs": {
-                "text": "sharp face, detailed eyes, natural skin texture, high quality portrait",
+                "text": "sharp face, detailed eyes, natural skin texture, high quality portrait, same face as original, preserve facial features",
                 "clip": ["20", 1]
             },
             "_meta": {"title": "臉部正面提示詞"}
@@ -199,7 +199,7 @@ def build_idm_vton_workflow(person_img: str, garment_img: str) -> dict:
         "22": {
             "class_type": "CLIPTextEncode",
             "inputs": {
-                "text": "blurry, deformed face, extra fingers, bad anatomy, disfigured, poorly drawn face",
+                "text": "blurry, deformed face, extra fingers, bad anatomy, disfigured, poorly drawn face, different face, changed face",
                 "clip": ["20", 1]
             },
             "_meta": {"title": "臉部負面提示詞"}
@@ -222,7 +222,7 @@ def build_idm_vton_workflow(person_img: str, garment_img: str) -> dict:
                 "cfg": 7.0,
                 "sampler_name": "euler_ancestral",
                 "scheduler": "normal",
-                "denoise": 0.35,
+                "denoise": 0.2,
                 "feather": 5,
                 "noise_mask": True,
                 "force_inpaint": True,

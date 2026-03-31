@@ -17,7 +17,7 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 from dotenv import load_dotenv
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, CallbackQueryHandler,
     ContextTypes, filters,
@@ -349,10 +349,13 @@ async def process_clothing(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE,
                            sess: dict, user_id: int):
     """IDM-VTON 換裝（骨架引導 + 自動遮罩 + 臉部修復）"""
 
+    workflow_name = "IDM-VTON (ClothingChange_IDM_VTON)"
+    log.info(f"[clothing] Using workflow: {workflow_name}")
     msg = await ctx.bot.send_message(
         chat_id=chat_id,
         text=(
-            "⏳ 👗 IDM-VTON 換裝處理中...\n\n"
+            "⏳ 👗 換裝處理中...\n\n"
+            f"📋 工作流: {workflow_name}\n"
             f"👤 人物: {sess['person']}\n"
             f"👗 服裝: {sess['clothing']}\n\n"
             "DWPose 骨架 + DensePose + 自動遮罩 + 臉部修復\n"
@@ -401,10 +404,13 @@ async def process_face(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE,
                        sess: dict, user_id: int):
     """FaceOff: Flux Klein 4B + ReferenceLatent + ReActor face swap"""
 
+    workflow_name = "ReActor FaceSwap (FaceOff_V1)"
+    log.info(f"[face] Using workflow: {workflow_name}")
     msg = await ctx.bot.send_message(
         chat_id=chat_id,
         text=(
             "⏳ 😊 換臉處理中...\n\n"
+            f"📋 工作流: {workflow_name}\n"
             f"👤 人物: {sess['person']}\n"
             f"😊 臉孔: {sess['face']}\n\n"
             "請稍候約 30~60 秒..."
@@ -452,10 +458,13 @@ async def process_klein(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE,
                         sess: dict, user_id: int):
     """Klein VTON + ReActor: 換裝（Florence2 自動描述）+ 換臉"""
 
+    workflow_name = "Klein 4B + ReActor (KleinVTON_V1)"
+    log.info(f"[klein] Using workflow: {workflow_name}")
     msg = await ctx.bot.send_message(
         chat_id=chat_id,
         text=(
             "⏳ ✨ Klein VTON 處理中...\n\n"
+            f"📋 工作流: {workflow_name}\n"
             f"👤 人物: {sess['person']}\n"
             f"👗 服裝: {sess['clothing']}\n"
             f"😊 臉孔: {sess['face']}\n\n"
@@ -580,6 +589,20 @@ def main():
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+
+    # 更新 Telegram 指令選單（問題 4 修正）
+    async def post_init(application):
+        await application.bot.set_my_commands([
+            BotCommand("go_c", "👗 換裝（IDM-VTON）"),
+            BotCommand("go_f", "😊 換臉（ReActor）"),
+            BotCommand("go_k", "✨ 換裝+換臉（Klein VTON）"),
+            BotCommand("cancel", "❌ 取消"),
+            BotCommand("status", "📊 檢查 ComfyUI"),
+            BotCommand("start", "👋 顯示說明"),
+        ])
+        log.info("Telegram command menu updated")
+
+    app.post_init = post_init
 
     log.info("Bot started! Waiting for messages...")
     app.run_polling(
