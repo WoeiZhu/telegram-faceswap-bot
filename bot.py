@@ -566,6 +566,19 @@ def reset_telegram_polling():
     log.info("Telegram polling reset done")
 
 
+async def post_init(application):
+    """更新 Telegram 指令選單"""
+    await application.bot.set_my_commands([
+        BotCommand("go_c", "換裝 IDM-VTON（人物+服裝）"),
+        BotCommand("go_f", "換臉 ReActor（人物+臉孔）"),
+        BotCommand("go_k", "換裝+換臉 Klein VTON（3張圖）"),
+        BotCommand("cancel", "取消目前操作"),
+        BotCommand("status", "檢查 ComfyUI 狀態"),
+        BotCommand("start", "顯示指令說明"),
+    ])
+    log.info("Telegram command menu updated")
+
+
 def main():
     # Force-reset polling to prevent 409 from zombie sessions
     reset_telegram_polling()
@@ -577,6 +590,7 @@ def main():
         .read_timeout(120)
         .write_timeout(120)
         .connect_timeout(30)
+        .post_init(post_init)
         .build()
     )
 
@@ -589,20 +603,6 @@ def main():
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-
-    # 更新 Telegram 指令選單（問題 4 修正）
-    async def post_init(application):
-        await application.bot.set_my_commands([
-            BotCommand("go_c", "👗 換裝（IDM-VTON）"),
-            BotCommand("go_f", "😊 換臉（ReActor）"),
-            BotCommand("go_k", "✨ 換裝+換臉（Klein VTON）"),
-            BotCommand("cancel", "❌ 取消"),
-            BotCommand("status", "📊 檢查 ComfyUI"),
-            BotCommand("start", "👋 顯示說明"),
-        ])
-        log.info("Telegram command menu updated")
-
-    app.post_init = post_init
 
     log.info("Bot started! Waiting for messages...")
     app.run_polling(
